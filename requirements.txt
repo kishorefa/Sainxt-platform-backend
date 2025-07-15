@@ -1,0 +1,13 @@
+Flask
+Flask-CORS
+mysql-connector-python
+pymongo
+PyJWT
+fastapi 
+uvicorn 
+python-dotenv 
+bcrypt 
+jwt 
+fastapi-mail 
+itsdangerous
+python-jose
