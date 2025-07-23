@@ -16,7 +16,7 @@ class EmailRequest(BaseModel):
 
 # MongoDB connection (shared with main app)
 client = MongoClient("mongodb://localhost:27017/")
-db = client["data"]
+db = client["dataaa"]
 collection = db["profiles"]
 
 @router.post("/generate-scores")

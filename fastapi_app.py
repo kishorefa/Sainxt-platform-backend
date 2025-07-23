@@ -502,21 +502,6 @@ def get_all_articles():
 
     return JSONResponse(content={"articles": articles})
 
-# @app.get("/get-all-articles/")
-# def get_all_articles():
-#     articles = list(article_card_collection.find({}, {"_id": 0}))
-
-#     for article in articles:
-#         if "image" in article and isinstance(article["image"], bytes):
-#             article["image"] = base64.b64encode(article["image"]).decode("utf-8")
-#             # DO NOT prepend "data:image/jpeg;base64," here
-
-#     return JSONResponse(content={"articles": articles})
-
-
-
-
-
 
 # Protected route example
 @app.get("/api/me")
