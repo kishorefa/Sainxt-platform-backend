@@ -1,14 +1,19 @@
 import os
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, File, Form, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import bcrypt
-import jwt
+import jwt  # ✅ This is correct if you're using PyJWT
 import datetime
+import uuid
+import base64
+from bson import ObjectId
 from typing import Optional, Union
 from pydantic import BaseModel, EmailStr
+import datetime
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from fastapi_mail.errors import ConnectionErrors
 from routers.profile import router as profile_router
@@ -16,9 +21,17 @@ from routers.ai_review import router as ai_review_router
 from routers.Mcq_question import get_mcq_router
 from routers.admin import router as admin
 from routers.article import router as article_router
+from routers import article 
 
 # Load .env variables
 load_dotenv()
+
+mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+client = MongoClient(mongo_uri)
+db = client[os.getenv("MONGO_DB_NAME", "dataaa")]
+collection = db["submitted_articles"]
+article_card_collection = db["article_cards"]
+
 
 # Initialize FastAPI app
 app = FastAPI(title="Interview Platform API", version="1.0.0")
@@ -28,7 +41,7 @@ app.include_router(profile_router, prefix='/api', tags=['profile'])
 app.include_router(ai_review_router, prefix='/api', tags=['ai-review'])
 app.include_router(get_mcq_router())
 app.include_router(admin, prefix='/api/admin', tags=['admin'])
-app.include_router(article_router, prefix="/api/article", tags=["article"])
+app.include_router(article_router)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +51,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+app.include_router(article.router, prefix="/api/article")
 
 # Add request logging middleware
 @app.middleware("http")
@@ -120,6 +135,11 @@ class ResetPassword(BaseModel):
 class NewPassword(BaseModel):
     token: str
     newPassword: str
+
+# client = MongoClient("mongodb://localhost:27017/")
+# db = client["dataaa"]
+# print("Connected to DB:", db.name) 
+# collection = db["submitted_articles"]
 
 # Helper functions
 def create_access_token(data: dict, expires_delta: Optional[datetime.timedelta] = None):
@@ -405,6 +425,83 @@ async def reset_password(data: NewPassword):
     except Exception as e:
         print(f"❌ Error in reset_password: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+def serialize_article(article):
+    return {
+        "_id": str(article.get("_id")),
+        "article_id": article.get("article_id"),
+        "title": article.get("title"),
+        "status": article.get("status"),
+        "content": article.get("content"),
+    }
+
+@app.get("/article/list")
+async def list_articles():
+    print(f"Using collection: {collection.name}")
+    print(f"Total documents in collection: {collection.count_documents({})}")
+    # articles_cursor = collection.find()
+    articles_cursor = article_card_collection.find()
+    articles = [serialize_article(article) for article in articles_cursor]
+    print(f"Fetched from DB: {articles}")
+    return {"articles": articles}
+
+
+@app.get("/article/{article_id}")
+async def get_article(article_id: str):
+    print(f"Fetching article with article_id: {article_id}")
+
+    # Only fetch by article_id (not by _id)
+    article = collection.find_one({"article_id": article_id})
+
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    return serialize_article(article)
+
+
+
+
+@app.post("/api/article/article_card")
+async def create_article(
+    title: str = Form(...),
+    description: str = Form(...),
+    image: UploadFile = File(...)
+):
+    contents = await image.read()
+    article = {
+        "article_id": str(uuid.uuid4())[:8],
+        "title": title,
+        "description": description,
+        "image": contents,  # Binary image data (saved to Mongo)
+        "filename": image.filename,
+        "content_type": image.content_type,
+    }
+
+    result = article_card_collection.insert_one(article)
+
+    return {
+        "message": "Article created",
+        "article_id": article["article_id"],
+        "filename": image.filename,
+        "content_type": image.content_type,
+    }
+
+
+
+
+@app.get("/get-all-articles/")
+def get_all_articles():
+    articles = list(article_card_collection.find({}, {"_id": 0}))
+
+    for article in articles:
+        if "image" in article and isinstance(article["image"], bytes):
+            content_type = article.get("content_type", "image/jpeg")
+            raw_base64 = base64.b64encode(article["image"]).decode("utf-8")
+            article["image_raw"] = raw_base64
+            article["image"] = f"data:{content_type};base64,{raw_base64}"
+
+    return JSONResponse(content={"articles": articles})
+
 
 # Protected route example
 @app.get("/api/me")
