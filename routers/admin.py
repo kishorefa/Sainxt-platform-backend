@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from pymongo import MongoClient
+from bson import ObjectId
 from bson.binary import Binary
 from datetime import datetime, timedelta
+from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
 import jwt
@@ -106,3 +108,39 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get("/admin/dashboard")
 def admin_dashboard():
     return {"message": "Welcome to the admin dashboard"}
+
+# Get all users categorized by type
+@router.get("/users", response_model=Dict[str, List[Dict[str, Any]]])
+async def get_users():
+    try:
+        # Get all users from the database
+        users = list(db.users.find({}, {
+            "password": 0,  # Exclude password hash
+            "reset_password_token": 0,
+            "reset_password_expires": 0
+        }))
+        
+        # Convert ObjectId to string for JSON serialization
+        for user in users:
+            user["_id"] = str(user["_id"])
+            # Ensure all expected fields exist
+            user.setdefault("userType", "individual")
+            user.setdefault("firstName", "")
+            user.setdefault("lastName", "")
+            user.setdefault("email", "")
+            user.setdefault("createdAt", "")
+        
+        # Categorize users by type
+        categorized_users = {
+            "admin": [u for u in users if u.get("userType") == "admin"],
+            "individual": [u for u in users if u.get("userType") == "individual"],
+            "enterprise": [u for u in users if u.get("userType") == "enterprise"]
+        }
+        
+        return categorized_users
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while fetching users: {str(e)}"
+        )

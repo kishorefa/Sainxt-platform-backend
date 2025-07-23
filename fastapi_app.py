@@ -16,6 +16,8 @@ from routers.ai_review import router as ai_review_router
 from routers.Mcq_question import get_mcq_router
 from routers.admin import router as admin
 from routers.article import router as article_router
+from routers.jdinterview import router as jdinterview_router
+from routers.report import router as report_router
 
 # Load .env variables
 load_dotenv()
@@ -23,21 +25,46 @@ load_dotenv()
 # Initialize FastAPI app
 app = FastAPI(title="Interview Platform API", version="1.0.0")
 
+# MongoDB connection
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+        db_name = os.getenv("MONGO_DB_NAME", "interview_db")
+        app.state.mongo_client = MongoClient(mongo_uri)
+        app.state.db = app.state.mongo_client[db_name]
+        print("✅ Connected to MongoDB")
+    except Exception as e:
+        print(f"❌ MongoDB connection failed: {e}")
+        raise
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    app.state.mongo_client.close()
+
+# CORS middleware configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Default Next.js dev server
+        "http://localhost:3001",
+        "http://127.0.0.1:3000", "http://192.168.0.229:3000",
+        "http://192.168.0.207:3000"  # Add other origins as needed
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["Content-Type", "Set-Cookie", "Authorization"],
+)
+
 # Include routers
 app.include_router(profile_router, prefix='/api', tags=['profile'])
 app.include_router(ai_review_router, prefix='/api', tags=['ai-review'])
 app.include_router(get_mcq_router())
 app.include_router(admin, prefix='/api/admin', tags=['admin'])
 app.include_router(article_router, prefix="/api/article", tags=["article"])
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://192.168.0.229:3000", "http://192.168.0.207:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
+app.include_router(jdinterview_router, prefix="/api/jd", tags=["jd"])
+app.include_router(report_router)  # Add this line to include the report router
 
 # Add request logging middleware
 @app.middleware("http")
@@ -54,17 +81,6 @@ async def log_requests(request: Request, call_next):
     
     response = await call_next(request)
     return response
-
-# MongoDB configuration
-try:
-    mongo_uri = os.getenv("MONGO_URI")
-    db_name = os.getenv("MONGO_DB_NAME")
-    client = MongoClient(mongo_uri)
-    db = client[db_name]
-    print("✅ Connected to MongoDB")
-except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    exit(1)
 
 # JWT config
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
@@ -154,7 +170,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.users.find_one({"email": email})
+    user = app.state.db.users.find_one({"email": email})
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -175,7 +191,7 @@ async def _create_user_account(user_data: Union[UserCreate, EnterpriseCreate]):
     print(f"Creating {'enterprise ' if isinstance(user_data, EnterpriseCreate) else ''}account for email: {user_data.email}")
 
     # Check if user already exists in the 'users' collection
-    if db.users.find_one({"email": user_data.email}):
+    if app.state.db.users.find_one({"email": user_data.email}):
         print(f"Account already exists for email: {user_data.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -198,7 +214,7 @@ async def _create_user_account(user_data: Union[UserCreate, EnterpriseCreate]):
         }
         
         # Insert common user data and get the new user's ID
-        user_result = db.users.insert_one(common_user_data)
+        user_result = app.state.db.users.insert_one(common_user_data)
         user_id = user_result.inserted_id
         
         # If it's an enterprise user, store enterprise-specific data
@@ -214,7 +230,7 @@ async def _create_user_account(user_data: Union[UserCreate, EnterpriseCreate]):
                 "website": user_data.website,
                 "created_at": datetime.datetime.utcnow()
             }
-            db.enterprise.insert_one(enterprise_data)
+            app.state.db.enterprise.insert_one(enterprise_data)
             print(f"Enterprise details for {user_data.companyName} stored successfully.")
         
         # Create a basic profile for the user
@@ -226,7 +242,7 @@ async def _create_user_account(user_data: Union[UserCreate, EnterpriseCreate]):
             "created_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow()
         }
-        db.profiles.insert_one(profile_data)
+        app.state.db.profiles.insert_one(profile_data)
         print(f"Basic profile created for user: {user_data.email}")
 
         print(f"Account created successfully for: {user_data.email}")
@@ -273,7 +289,7 @@ async def send_welcome_email(email: str, name: str, user_type: str):
 @app.post("/api/login")
 async def login(user_data: UserLogin, userType: str = None):
     # Check if user exists
-    user = db.users.find_one({"email": user_data.email})
+    user = app.state.db.users.find_one({"email": user_data.email})
     
     if not user:
         raise HTTPException(status_code=401, detail="Email not registered.")
@@ -323,7 +339,7 @@ async def login(user_data: UserLogin, userType: str = None):
 async def forgot_password(reset_data: ResetPassword):
     try:
         print(f"🔍 Looking up user with email: {reset_data.email}")
-        user = db.users.find_one({"email": reset_data.email})
+        user = app.state.db.users.find_one({"email": reset_data.email})
 
         if not user:
             print(f"ℹ️  Email not found in database: {reset_data.email}")
@@ -385,13 +401,13 @@ async def forgot_password(reset_data: ResetPassword):
 async def reset_password(data: NewPassword):
     try:
         token_data = jwt.decode(data.token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user = db.users.find_one({"email": token_data["email"]})
+        user = app.state.db.users.find_one({"email": token_data["email"]})
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
             
         hashed_password = bcrypt.hashpw(data.newPassword.encode("utf-8"), bcrypt.gensalt())
-        db.users.update_one(
+        app.state.db.users.update_one(
             {"email": token_data["email"]},
             {"$set": {"password": hashed_password}}
         )
