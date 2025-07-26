@@ -22,6 +22,10 @@ from routers.Mcq_question import get_mcq_router
 from routers.admin import router as admin
 from routers.article import router as article_router
 from routers import article 
+from routers import introductory_training
+from routers.certificate import router as certificate_router
+
+
 
 # Load .env variables
 load_dotenv()
@@ -42,6 +46,9 @@ app.include_router(ai_review_router, prefix='/api', tags=['ai-review'])
 app.include_router(get_mcq_router())
 app.include_router(admin, prefix='/api/admin', tags=['admin'])
 app.include_router(article_router)
+app.include_router(introductory_training.router, prefix="/api/user", tags=["training-progress"])
+app.include_router(certificate_router, prefix="/api/user", tags=["certificate"])
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
