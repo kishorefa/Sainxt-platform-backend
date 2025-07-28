@@ -78,8 +78,9 @@ class PreferencesModel(BaseModel):
 
 # Dependency to get the database collection
 def get_db_collection():
-    from fastapi_app import db
-    return db['profiles']
+    from fastapi import Request
+    from fastapi_app import app
+    return app.state.db['profiles']
 
 last_email = None
 

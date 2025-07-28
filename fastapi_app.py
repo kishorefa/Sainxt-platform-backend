@@ -1,14 +1,20 @@
 import os
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request,File, Form, UploadFile
+
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import base64
+import uuid
 import bcrypt
 import jwt
 import datetime
-from typing import Optional, Union
+from typing import Optional, Union, List
 from pydantic import BaseModel, EmailStr
+from bson import ObjectId
+from pymongo import ReturnDocument
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from fastapi_mail.errors import ConnectionErrors
 from routers.profile import router as profile_router
@@ -18,13 +24,21 @@ from routers.admin import router as admin
 from routers.article import router as article_router
 from routers.jdinterview import router as jdinterview_router
 from routers.report import router as report_router
+from routers.article_card import router as article_card_router
+from routers import introductory_training
+from routers.certificate import router as certificate_router
 
 # Load .env variables
 load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(title="Interview Platform API", version="1.0.0")
-
+mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+client = MongoClient(mongo_uri)
+db = client[os.getenv("MONGO_DB_NAME", "data")]
+collection = db["submitted_articles"]
+article_card_collection = db["article_cards"]
+ 
 # MongoDB connection
 @app.on_event("startup")
 async def startup_db_client():
@@ -48,7 +62,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",  # Default Next.js dev server
         "http://localhost:3001",
-        "http://127.0.0.1:3000", "http://192.168.0.229:3000",
+        "http://127.0.0.1:3000", "http://192.168.0.229:3000","http://192.168.0.220:3000",
         "http://192.168.0.207:3000"  # Add other origins as needed
     ],
     allow_credentials=True,
@@ -63,8 +77,12 @@ app.include_router(ai_review_router, prefix='/api', tags=['ai-review'])
 app.include_router(get_mcq_router())
 app.include_router(admin, prefix='/api/admin', tags=['admin'])
 app.include_router(article_router, prefix="/api/article", tags=["article"])
+app.include_router(article_card_router, prefix="/api", tags=["article_cards"])
 app.include_router(jdinterview_router, prefix="/api/jd", tags=["jd"])
 app.include_router(report_router)  # Add this line to include the report router
+app.include_router(introductory_training.router, prefix="/api/user", tags=["training-progress"])
+app.include_router(certificate_router, prefix="/api/user", tags=["certificate"])
+
 
 # Add request logging middleware
 @app.middleware("http")
@@ -421,6 +439,84 @@ async def reset_password(data: NewPassword):
     except Exception as e:
         print(f"❌ Error in reset_password: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid or expired token")
+def serialize_article(article):
+    return {
+        "_id": str(article.get("_id")),
+        "article_id": article.get("article_id"),
+        "title": article.get("title"),
+        "status": article.get("status"),
+        "content": article.get("content"),
+    }
+
+@app.get("/article/list")
+async def list_articles():
+    print(f"Using collection: {collection.name}")
+    print(f"Total documents in collection: {collection.count_documents({})}")
+    # articles_cursor = collection.find()
+    articles_cursor = article_card_collection.find()
+    articles = [serialize_article(article) for article in articles_cursor]
+    print(f"Fetched from DB: {articles}")
+    return {"articles": articles}
+
+
+@app.get("/article/{article_id}")
+async def get_article(article_id: str):
+    print(f"Fetching article with article_id: {article_id}")
+
+    # Only fetch by article_id (not by _id)
+    article = collection.find_one({"article_id": article_id})
+
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    return serialize_article(article)
+
+
+
+
+@app.post("/api/article/article_card")
+async def create_article(
+    title: str = Form(...),
+    description: str = Form(...),
+    image: UploadFile = File(...)
+):
+    contents = await image.read()
+    article = {
+        "article_id": str(uuid.uuid4())[:8],
+        "title": title,
+        "description": description,
+        "image": contents,  # Binary image data (saved to Mongo)
+        "filename": image.filename,
+        "content_type": image.content_type,
+    }
+
+    result = article_card_collection.insert_one(article)
+
+    return {
+        "message": "Article created",
+        "article_id": article["article_id"],
+        "filename": image.filename,
+        "content_type": image.content_type,
+    }
+
+
+
+
+@app.get("/get-all-articles/")
+def get_all_articles():
+    articles = list(article_card_collection.find({}, {"_id": 0}))
+
+    for article in articles:
+        if "image" in article and isinstance(article["image"], bytes):
+            content_type = article.get("content_type", "image/jpeg")
+            raw_base64 = base64.b64encode(article["image"]).decode("utf-8")
+            article["image_raw"] = raw_base64
+            article["image"] = f"data:{content_type};base64,{raw_base64}"
+
+    return JSONResponse(content={"articles": articles})
+
+
+
 
 # Protected route example
 @app.get("/api/me")
