@@ -473,25 +473,26 @@ async def get_article(article_id: str):
 
 
 
-
 @app.post("/api/article/article_card")
 async def create_article(
     title: str = Form(...),
+    category: str = Form(...),
     description: str = Form(...),
     image: UploadFile = File(...)
 ):
     contents = await image.read()
     article = {
         "article_id": str(uuid.uuid4())[:8],
+        "category": category,
         "title": title,
         "description": description,
         "image": contents,  # Binary image data (saved to Mongo)
         "filename": image.filename,
         "content_type": image.content_type,
     }
-
+ 
     result = article_card_collection.insert_one(article)
-
+ 
     return {
         "message": "Article created",
         "article_id": article["article_id"],
