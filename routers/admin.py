@@ -144,3 +144,11 @@ async def get_users():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while fetching users: {str(e)}"
         )
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str):
+    user = db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+   
+    db.users.delete_one({"_id": ObjectId(user_id)})
+    return {"message": "User deleted successfully"}
