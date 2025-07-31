@@ -36,12 +36,31 @@ class SubmitRequest(BaseModel):
 async def start_assignment(category: Optional[str] = None, collection = Depends(get_mcq_collection)):
     query = {"category": category} if category else {}
     questions = list(collection.find(query, {"_id": 0}))
-
+ 
     if not questions:
         raise HTTPException(status_code=404, detail="No questions found for this category.")
-
+ 
     random.shuffle(questions)
-    return {"questions": questions[:10]}
+ 
+    def shuffle_options(question):
+        options = question.get("options", [])
+        correct_text = question.get("answer")
+ 
+        if not options or not correct_text:
+            return None
+ 
+        shuffled_options = options[:]
+        random.shuffle(shuffled_options)
+ 
+        return {
+            "question": question["question"],
+            "options": shuffled_options,         # ✅ just an array of options
+            "answer": correct_text,              # ✅ still the original answer text
+            "category": question.get("category", "")
+        }
+ 
+    shuffled_questions = [q for q in (shuffle_options(q) for q in questions[:10]) if q]
+    return {"questions": shuffled_questions}
 
 
 # -------------------------------

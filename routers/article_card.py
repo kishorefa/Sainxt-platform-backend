@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 load_dotenv()
 
 router = APIRouter()
+
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client[os.getenv("MONGO_DB_NAME", "data")]
 featured_collection = db["featured_articles"]
@@ -41,6 +42,7 @@ async def get_article_dropdown():
 async def add_article_card(
     title: str = Form(...),
     description: str = Form(...),
+    article_id: str = Form(...),  # Required for deletion later
     image: UploadFile = File(...)
 ):
     try:
@@ -48,6 +50,7 @@ async def add_article_card(
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
         document = {
+            "article_id": article_id.strip(),  # <-- Ensure article_id is saved
             "title": title.strip(),
             "description": description.strip(),
             "image_base64": image_base64,
@@ -56,7 +59,7 @@ async def add_article_card(
             "updated_at": datetime.datetime.utcnow(),
         }
 
-        result = featured_collection.insert_one(document)
+        result = article_cards_collection.insert_one(document)  # <-- Use correct collection
         return {"message": "Card added", "id": str(result.inserted_id)}
     
     except Exception as e:
@@ -69,3 +72,30 @@ def get_featured_cards():
     for card in cards:
         card["_id"] = str(card["_id"])
     return {"cards": cards}
+
+@router.delete("/admin/article-card/{card_id}")
+async def delete_article_card(card_id: str):
+    """
+    Delete an article card from 'article_cards' collection using article_id.
+    """
+    try:
+        card_id = card_id.strip()
+
+        # Try to delete based on article_id field
+        result = article_cards_collection.delete_one({"article_id": card_id})
+
+        if result.deleted_count == 1:
+            return {
+                "status": "success",
+                "message": f"Article card with article_id '{card_id}' deleted successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Article card with article_id '{card_id}' not found"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting article card: {str(e)}"
+        )

@@ -82,7 +82,7 @@ app.include_router(jdinterview_router, prefix="/api/jd", tags=["jd"])
 app.include_router(report_router)  # Add this line to include the report router
 app.include_router(introductory_training.router, prefix="/api/user", tags=["training-progress"])
 app.include_router(certificate_router, prefix="/api/user", tags=["certificate"])
-
+app.include_router(article_card_router, prefix="/api")
 
 # Add request logging middleware
 @app.middleware("http")
