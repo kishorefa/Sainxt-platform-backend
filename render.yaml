@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: sainxt-backend
+    env: python
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: "gunicorn -c gunicorn_config.py fastapi_app:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        value: mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0
+      - key: MONGO_DB_NAME
+        value: data
+      - key: JWT_SECRET
+        value: your-jwt-secret-key-here
+      - key: MAIL_USERNAME
+        value: kishore47777@gmail.com
+      - key: MAIL_PASSWORD
+        value: dusicwjwsheqonvv
+      - key: MAIL_FROM
+        value: kishore47777@gmail.com
+      - key: MAIL_PORT
+        value: 587
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_STARTTLS
+        value: 'true'
+      - key: MAIL_SSL_TLS
+        value: 'false'
+    plan: free

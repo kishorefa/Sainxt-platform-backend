@@ -6,7 +6,7 @@ from pymongo import MongoClient
 app = FastAPI()
 
 # MongoDB connection (local)
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/")
 db = client["user_profiles"]
 collection = db["profiles"]
 

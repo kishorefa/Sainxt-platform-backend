@@ -11,7 +11,7 @@ load_dotenv()
 router = APIRouter()
 
 # MongoDB setup
-client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+client = MongoClient(os.getenv("MONGO_URI", "mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/"))
 db_name = os.getenv("MONGO_DB_NAME", "data")
 db = client[db_name]
 collection = db["submitted_articles"]

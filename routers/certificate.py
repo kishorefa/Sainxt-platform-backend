@@ -8,7 +8,7 @@ router = APIRouter(prefix="/certificate", tags=["certificate"])
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key")
 ALGORITHM = "HS256"
  
-client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"))
+client = MongoClient(os.getenv("MONGO_URI", "mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0"))
 db = client[os.getenv("MONGO_DB_NAME", "data")]
 progress_collection = db["training_progress"]
  

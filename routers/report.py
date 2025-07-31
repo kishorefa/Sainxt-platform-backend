@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/report", tags=["reports"])
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # MongoDB connection
-client = MongoClient('mongodb://localhost:27017/')
+client = MongoClient('mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/')
 db = client.interview_db
 interview_responses_collection = db.interview_responses
 

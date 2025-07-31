@@ -33,7 +33,7 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(title="Interview Platform API", version="1.0.0")
-mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/")
 client = MongoClient(mongo_uri)
 db = client[os.getenv("MONGO_DB_NAME", "data")]
 collection = db["submitted_articles"]
@@ -43,7 +43,7 @@ article_card_collection = db["article_cards"]
 @app.on_event("startup")
 async def startup_db_client():
     try:
-        mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+        mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/")
         db_name = os.getenv("MONGO_DB_NAME", "interview_db")
         app.state.mongo_client = MongoClient(mongo_uri)
         app.state.db = app.state.mongo_client[db_name]

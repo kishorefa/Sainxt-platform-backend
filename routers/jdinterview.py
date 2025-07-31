@@ -14,7 +14,7 @@ router = APIRouter()
 
 # ------------------ MongoDB Setup ------------------
 
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb+srv://checkmain32:Kishore123@cluster0.jdacyq4.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0/")
 db = client["interview_db"]
 jd_collection = db["jd_questions"]
 interview_collection = db["interview_responses"]
