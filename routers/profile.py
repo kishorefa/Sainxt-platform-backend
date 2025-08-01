@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from pymongo import MongoClient
+from datetime import datetime, timezone
 import jwt
 import os
 import datetime
@@ -26,6 +28,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Assuming MongoDB connection is handled in fastapi_app.py and injected
 router = APIRouter()
+
+client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+db = client[os.getenv("MONGO_DB_NAME", "dataaa")]
+profile_collection = db["profiles"]
 
 # Pydantic Models
 class ProfileModel(BaseModel):
@@ -87,59 +93,145 @@ last_email = None
 @router.post('/save_profile')
 async def api_save_profile(profile: ProfileModel, collection=Depends(get_db_collection)):
     global last_email
-    collection.insert_one(profile.dict())
     last_email = profile.email
-    return JSONResponse(content={'message': 'Profile saved successfully'}, status_code=201)
+
+    # Check if the profile already exists
+    existing_profile = collection.find_one({'email': profile.email})
+
+    if existing_profile:
+        # Update existing profile
+        result = collection.update_one(
+            {'email': profile.email},
+            {'$set': profile.dict()}
+        )
+        if result.modified_count:
+            return JSONResponse(content={'message': 'Profile updated successfully'}, status_code=200)
+        else:
+            return JSONResponse(content={'message': 'Profile already up to date'}, status_code=200)
+    else:
+        # Insert new profile
+        collection.insert_one(profile.dict())
+        return JSONResponse(content={'message': 'Profile created successfully'}, status_code=201)
+
 
 @router.post('/save_education')
 async def api_save_education(education: EducationModel, collection=Depends(get_db_collection)):
     global last_email
     if not last_email:
         raise HTTPException(status_code=400, detail='No profile found. Please submit profile first.')
-    result = collection.update_one({'email': last_email}, {'$set': education.dict()})
-    if result.modified_count == 1:
-        return JSONResponse(content={'message': 'Education details saved successfully'}, status_code=200)
-    raise HTTPException(status_code=404, detail='User profile not found')
+
+    collection.update_one(
+        {'email': last_email},
+        {'$set': education.dict()},
+        upsert=True
+    )
+    return JSONResponse(content={'message': 'Education details saved/updated successfully'}, status_code=200)
+
 
 @router.post('/save_experience')
 async def api_save_experience(exp: ExperienceModel, collection=Depends(get_db_collection)):
     global last_email
     if not last_email:
         raise HTTPException(status_code=400, detail='No profile found. Submit profile first.')
-    result = collection.update_one({'email': last_email}, {'$set': exp.dict()})
-    if result.modified_count == 1:
-        return JSONResponse(content={'message': 'Experience saved successfully'}, status_code=200)
-    raise HTTPException(status_code=404, detail='User profile not found')
+
+    collection.update_one(
+        {'email': last_email},
+        {'$set': exp.dict()},
+        upsert=True
+    )
+    return JSONResponse(content={'message': 'Experience saved/updated successfully'}, status_code=200)
+
 
 @router.post('/save_project')
 async def api_save_project(project: ProjectModel, collection=Depends(get_db_collection)):
     global last_email
     if not last_email:
         raise HTTPException(status_code=400, detail='No profile found. Submit profile first.')
-    result = collection.update_one({'email': last_email}, {'$set': project.dict()})
-    if result.modified_count == 1:
-        return JSONResponse(content={'message': 'Project saved successfully'}, status_code=200)
-    raise HTTPException(status_code=404, detail='User profile not found')
+
+    collection.update_one(
+        {'email': last_email},
+        {'$set': project.dict()},
+        upsert=True
+    )
+    return JSONResponse(content={'message': 'Project saved/updated successfully'}, status_code=200)
+
 
 @router.post('/save_skills')
 async def api_save_skills(skills: SkillsModel, collection=Depends(get_db_collection)):
     global last_email
     if not last_email:
         raise HTTPException(status_code=400, detail='No profile found. Submit profile first.')
-    result = collection.update_one({'email': last_email}, {'$set': skills.dict()})
-    if result.modified_count == 1:
-        return JSONResponse(content={'message': 'Skills saved successfully'}, status_code=200)
-    raise HTTPException(status_code=404, detail='User profile not found')
+
+    collection.update_one(
+        {'email': last_email},
+        {'$set': skills.dict()},
+        upsert=True
+    )
+    return JSONResponse(content={'message': 'Skills saved/updated successfully'}, status_code=200)
+
 
 @router.post('/save_preferences')
 async def api_save_preferences(pref: PreferencesModel, collection=Depends(get_db_collection)):
     global last_email
     if not last_email:
         raise HTTPException(status_code=400, detail='No profile found. Submit profile first.')
-    result = collection.update_one({'email': last_email}, {'$set': pref.dict()})
-    if result.modified_count == 1:
-        return JSONResponse(content={'message': 'Preferences saved successfully'}, status_code=200)
-    raise HTTPException(status_code=404, detail='User profile not found')
+
+    collection.update_one(
+        {'email': last_email},
+        {'$set': pref.dict()},
+        upsert=True
+    )
+    return JSONResponse(content={'message': 'Preferences saved/updated successfully'}, status_code=200)
+
+
+
+
+@router.get("/score")
+def get_profile_score(email: str):
+    profile = profile_collection.find_one({"email": email})
+    if not profile:
+        return {"exists": False}
+
+    scores = profile.get("scores", {})
+    try:
+        profile_score = float(scores.get("profile_score", 0))
+        qualification_score = float(scores.get("qualification_score", 0))
+        skill_score = float(scores.get("skill_score", 0))
+        soft_skills_score = float(scores.get("soft_skills_score", 0))
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Invalid score data")
+
+    avg_percent = (
+        (profile_score / 5) +
+        (qualification_score / 5) +
+        (skill_score / 5) +
+        (soft_skills_score / 5)
+    ) * 25
+
+    return {
+        "exists": True,
+        "percentage": round(avg_percent, 1)
+    }
+
+@router.get("/profile")
+def get_profile_by_email(email: str):
+    profile = profile_collection.find_one({"email": email})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    profile["_id"] = str(profile["_id"])
+    if "user_id" in profile:
+        profile["user_id"] = str(profile["user_id"])
+        
+    return profile
+
+
+
+
+
+
+
+
 
 @router.get('/user/profile')
 async def get_user_profile(token: str = Depends(oauth2_scheme), collection=Depends(get_db_collection)):

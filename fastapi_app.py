@@ -27,6 +27,7 @@ from routers.report import router as report_router
 from routers.article_card import router as article_card_router
 from routers import introductory_training
 from routers.certificate import router as certificate_router
+from routers.metrics import router as metrics_router
 
 # Load .env variables
 load_dotenv()
@@ -83,6 +84,7 @@ app.include_router(report_router)  # Add this line to include the report router
 app.include_router(introductory_training.router, prefix="/api/user", tags=["training-progress"])
 app.include_router(certificate_router, prefix="/api/user", tags=["certificate"])
 app.include_router(article_card_router, prefix="/api")
+app.include_router(metrics_router)
 
 # Add request logging middleware
 @app.middleware("http")
